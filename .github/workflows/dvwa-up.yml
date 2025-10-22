@@ -1,0 +1,21 @@
+name: Spin up DVWA (CI)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  dvwa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start DVWA with Docker Compose
+        run: |
+          docker compose up -d
+          docker ps
+      - name: Wait and curl homepage
+        run: |
+          sleep 15
+          curl -I http://localhost:8080 || true
+      - name: Stop and cleanup
+        if: always()
+        run: docker compose down -v
