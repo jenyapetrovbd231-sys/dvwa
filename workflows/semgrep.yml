@@ -26,11 +26,5 @@ jobs:
             --config p/php \
             --config p/javascript \
             --exclude node_modules --exclude vendor \
-            --sarif --sarif-output semgrep.sarif \
+            --output semgrep-report.md \
             --error
-
-      # Публикация отчёта в GitHub Security (отобразится в Security->Code scanning alerts)
-      - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: semgrep.sarif
