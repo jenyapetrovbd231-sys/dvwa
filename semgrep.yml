@@ -1,0 +1,7 @@
+rules:
+  - id: demo.no-plain-secrets
+    languages: [generic]
+    message: "Похоже на секрет в явном виде"
+    severity: WARNING
+    patterns:
+      - pattern: /(PASSWORD|TOKEN|SECRET)\s*:\s*.+/
