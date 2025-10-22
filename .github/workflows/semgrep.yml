@@ -11,14 +11,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Если используешь Python-утилиту semgrep (CE)
       - name: Install Semgrep
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install semgrep
           semgrep --version
 
-      # Запуск набора правил (OWASP Top 10 + PHP/JS) и экспорт SARIF
       - name: Run Semgrep scan
         run: |
           semgrep scan \
@@ -28,3 +26,10 @@ jobs:
             --exclude node_modules --exclude vendor \
             --output semgrep-report.md \
             --error
+
+      # 🟢 Новый шаг: сохранить файл semgrep-report.md
+      - name: Upload Semgrep report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep-report.md
