@@ -3,13 +3,13 @@ name: SAST - Semgrep
 on:
   push:
     branches: [ "main" ]
-    # Чтобы пуш отчёта не триггерил этот же workflow снова
+    # чтобы коммит отчёта не триггерил повторный запуск
     paths-ignore:
       - 'reports/**'
   pull_request:
 
 permissions:
-  contents: write   # нужно, чтобы пушить в репозиторий
+  contents: write   # нужно, чтобы пушить отчёт в репозиторий
 
 jobs:
   semgrep:
@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # чтобы можно было пушить
+          fetch-depth: 0   # чтобы был полный git для последующего push
 
       - name: Install Semgrep
         run: |
@@ -25,10 +25,10 @@ jobs:
           python3 -m pip install semgrep
           semgrep --version
 
-      # Генерируем Markdown-отчёт
+      # Генерируем отчёт (даже если есть находки — идём дальше)
       - name: Run Semgrep scan
         id: semgrep
-        continue-on-error: true   # позволяем шагу упасть, но продолжаем pipeline
+        continue-on-error: true
         run: |
           semgrep scan \
             --config p/owasp-top-ten \
@@ -37,30 +37,40 @@ jobs:
             --exclude node_modules --exclude vendor \
             --output semgrep-report.md \
             --error
+          # при желании параллельно вывести SARIF:
+          # semgrep scan --config p/owasp-top-ten --sarif --sarif-output semgrep.sarif || true
 
       - name: Prepare report filename
+        id: prep
         run: |
+          set -euxo pipefail
+          test -f semgrep-report.md || { echo "No report produced"; exit 1; }
+
           mkdir -p reports
           SHORT_SHA="${GITHUB_SHA::7}"
-          echo "REPORT_PATH=reports/semgrep-${GITHUB_RUN_NUMBER}-${SHORT_SHA}.md" >> $GITHUB_ENV
-          mv semgrep-report.md "${REPORT_PATH}"
+          REPORT_PATH="reports/semgrep-${GITHUB_RUN_NUMBER}-${SHORT_SHA}.md"
+
+          mv semgrep-report.md "$REPORT_PATH"
+
+          echo "REPORT_PATH=$REPORT_PATH" >> "$GITHUB_ENV"
+          echo "report_path=$REPORT_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Commit report back to repo (only on push to main)
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "${REPORT_PATH}"
-          git commit -m "chore(reports): add Semgrep report ${REPORT_PATH} [skip ci]" || echo "No changes to commit"
+          git add "${{ steps.prep.outputs.report_path }}"
+          git commit -m "chore(reports): Semgrep report ${{ steps.prep.outputs.report_path }} [skip ci]" || echo "No changes to commit"
           git push
 
       - name: Upload report as artifact (optional)
         uses: actions/upload-artifact@v4
         with:
           name: semgrep-report
-          path: ${{ env.REPORT_PATH }}
+          path: ${{ steps.prep.outputs.report_path }}
 
-      # Финально проваливаем job, если Semgrep нашёл проблемы
+      # если были findings (шаг semgrep завершился failure), урони всю job
       - name: Fail job if Semgrep had findings
         if: ${{ steps.semgrep.outcome == 'failure' }}
         run: exit 1
